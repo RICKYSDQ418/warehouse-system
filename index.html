@@ -2,7 +2,12 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NS Roofer">
+  <meta name="theme-color" content="#0f1117">
 <title>NS Roofer 采购管理系统</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -152,19 +157,48 @@ textarea{resize:vertical;min-height:68px}
 .setup h3{font-size:14px;font-weight:700;color:var(--or);margin-bottom:8px}
 .setup p{font-size:12px;color:var(--tx2);margin-bottom:14px;line-height:1.7}
 .cfgg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
-.mnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--sf);border-top:1px solid var(--bd);padding:6px 0;z-index:200}
-.mni{display:flex;justify-content:space-around}
-.mnbtn{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;color:var(--tx2);font-size:10px;cursor:pointer;padding:4px 8px}
+.mnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--sf);border-top:1px solid var(--bd);padding:4px 0 max(4px,env(safe-area-inset-bottom));z-index:200}
+.mni{display:flex;justify-content:space-around;overflow-x:auto;scrollbar-width:none}
+.mni::-webkit-scrollbar{display:none}
+.mnbtn{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;color:var(--tx2);font-size:10px;cursor:pointer;padding:6px 10px;min-width:52px;flex-shrink:0;-webkit-tap-highlight-color:transparent}
 .mnbtn.act{color:var(--or)}
-.mnicon{font-size:19px}
+.mnicon{font-size:22px;line-height:1}
 .inv-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--sf2);border-radius:var(--r);border:1px solid var(--bd);margin-bottom:8px}
-@media(max-width:640px){
-  .mnav{display:block}.main{padding:12px;padding-bottom:80px}
-  .topbar{padding:0 12px}.t-nav{display:none}
+@media(max-width:768px){
+  .mnav{display:block}
+  .t-nav{display:none}
+  .topbar{padding:0 12px;height:48px}
+  .main{padding:12px;padding-bottom:90px}
   .sg{grid-template-columns:1fr 1fr}
-  table{font-size:12px}th,td{padding:8px 10px}
-  .fg{grid-template-columns:1fr}.lbox{width:100%}
+  .sc{padding:12px}.sv{font-size:22px}
+  .fg{grid-template-columns:1fr}.lbox{width:100%;padding:0 16px}
   .dbox-g{grid-template-columns:1fr}
+  .tbw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{font-size:13px;min-width:480px}
+  th,td{padding:10px 12px}
+  .moverlay{padding:0;align-items:flex-end}
+  .mbox{max-width:100%;width:100%;max-height:92vh;border-radius:var(--rl) var(--rl) 0 0;border-bottom:none}
+  .mlg{max-width:100%}
+  .btn{padding:10px 16px;font-size:14px;min-height:44px}
+  .btn-sm{padding:8px 12px;font-size:13px;min-height:38px}
+  .btn-xs{padding:6px 10px;font-size:12px;min-height:34px}
+  .mfoot{flex-direction:column;gap:8px}
+  .mfoot .btn{width:100%;justify-content:center}
+  .mfoot .btn-g{order:99}
+  .pkgrid{grid-template-columns:1fr 1fr}
+  .pkitem{padding:12px}.pkname{font-size:14px}
+  .ph{flex-direction:column;align-items:flex-start;gap:10px}
+  .ph .btn{width:100%;justify-content:center}
+  .ptitle{font-size:18px}
+  input,select,textarea{padding:11px 12px;font-size:16px}
+  .si{padding:10px 12px;font-size:15px}
+  .qc-inp{width:70px!important;font-size:16px!important;padding:6px!important}
+  .qc-m,.qc-p{width:34px!important;height:34px!important;font-size:18px!important}
+}
+@media(max-width:400px){
+  .sg{grid-template-columns:1fr}
+  .dg{grid-template-columns:1fr}
+  .pkgrid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -971,11 +1005,25 @@ g('t-logout').addEventListener('click',function(){
 // ── 导航 ──
 function buildNav(role){
   var nav=g('t-nav'),mnav=g('mni');nav.innerHTML='';mnav.innerHTML='';
+  var ICON_MAP={
+    'crew-req':'📋','crew-inv':'🧰','crew-loss':'⚠️','crew-pickup':'📦','crew-mat':'📋','crew-suggest':'💡',
+    'office-approval':'✅','office-po':'🛒','office-warehouse':'🏭','office-mat':'📋','office-tmpl':'📋',
+    'office-pickup':'🤝','office-catalog':'📦','office-suggest':'📥','office-loss':'🔄','office-proj':'🏗️',
+    'mgmt-dash':'📊','mgmt-mat':'📋','mgmt-inv':'🧰','mgmt-acc':'👥'
+  };
+  var LABEL_MAP={
+    'crew-req':'申请','crew-inv':'库存','crew-loss':'报损','crew-pickup':'领取','crew-mat':'材料单','crew-suggest':'建议',
+    'office-approval':'审批','office-po':'采购','office-warehouse':'仓库','office-mat':'材料单','office-tmpl':'模板',
+    'office-pickup':'领取','office-catalog':'材料库','office-suggest':'建议','office-loss':'报损','office-proj':'项目',
+    'mgmt-dash':'总览','mgmt-mat':'材料','mgmt-inv':'库存','mgmt-acc':'账号'
+  };
   NAV[role].forEach(function(item,i){
     var btn=document.createElement('button');btn.className='nbtn'+(i===0?' act':'');btn.textContent=item.l;
     btn.addEventListener('click',function(){showPage(item.id,btn)});nav.appendChild(btn);
     var mb=document.createElement('button');mb.className='mnbtn'+(i===0?' act':'');
-    mb.innerHTML='<span class="mnicon">'+item.l.slice(0,2)+'</span><span>'+item.l.replace(/[^\u4e00-\u9fff]/g,'').trim().slice(0,3)+'</span>';
+    var icon=ICON_MAP[item.id]||item.l.slice(0,2);
+    var label=LABEL_MAP[item.id]||item.l.replace(/[^\u4e00-\u9fff]/g,'').trim().slice(0,3);
+    mb.innerHTML='<span class="mnicon">'+icon+'</span><span>'+label+'</span>';
     mb.addEventListener('click',function(){showPage(item.id,btn);document.querySelectorAll('.mnbtn').forEach(function(b){b.classList.remove('act')});mb.classList.add('act')});
     mnav.appendChild(mb);
   });
@@ -2646,9 +2694,29 @@ return {
 // ── INIT ──
 (function(){
   S.accounts=Object.assign({},DEFAULT_ACCOUNTS);
-  try{var saved=localStorage.getItem('ns_v6');if(saved){var s=JSON.parse(saved);if(s&&s.accounts&&Object.keys(s.accounts).length>0)Object.assign(S,s)}}catch(e){}
+  try{var saved=localStorage.getItem('ns_v6');if(saved){var s=JSON.parse(saved);if(s&&s.accounts&&Object.keys(s.accounts).length>0){Object.assign(S,s);
+    if(!S.project_materials)S.project_materials={};
+    if(!S.mat_templates)S.mat_templates={};
+    if(!S.projects||Object.keys(S.projects).length<5){var savedAccs=S.accounts;var savedPOs=S.purchase_orders;var savedWH=S.warehouse_stock;var savedTI=S.team_inventory;seedDemo();S.accounts=savedAccs;S.purchase_orders=savedPOs;S.warehouse_stock=savedWH;S.team_inventory=savedTI;}
+  }}}catch(e){}
   renderLoginList();
-  try{var fbCfg=localStorage.getItem('ns_fb_cfg');if(fbCfg)initFB(JSON.parse(fbCfg));else if(localStorage.getItem('ns_demo'))loadDemo()}catch(e){}
+  // 自动连接 Firebase（配置已内置）
+  var BUILT_IN_FB_CFG={
+    apiKey:'AIzaSyCAWcR7G8F41mDK9OhAuDqkSmZ4NNiLmCA',
+    authDomain:'nsroofing-material.firebaseapp.com',
+    databaseURL:'https://nsroofing-material-default-rtdb.firebaseio.com',
+    projectId:'nsroofing-material',
+    storageBucket:'nsroofing-material.firebasestorage.app',
+    messagingSenderId:'1080008893951',
+    appId:'1:1080008893951:web:7f662e1cae3c9c5791f3ca'
+  };
+  try{
+    var savedCfg=localStorage.getItem('ns_fb_cfg');
+    initFB(savedCfg?JSON.parse(savedCfg):BUILT_IN_FB_CFG);
+  }catch(e){
+    console.error('Firebase连接失败，切换本地模式',e);
+    loadDemo();
+  }
 })();
 
 })(); // end APP
@@ -2663,7 +2731,9 @@ return {
 
 
 
+
 </script>
+
 
 
 
@@ -2689,5 +2759,3 @@ return {
   </div>
   <div class="mfoot"><button class="btn btn-g" onclick="APP.closeM('mo-from-tmpl')">取消</button><button class="btn btn-p" onclick="APP.applyTmpl()">✓ 应用模板</button></div>
 </div></div>
-
-
