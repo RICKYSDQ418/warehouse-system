@@ -868,7 +868,7 @@ function initFB(cfg){
     var tables=['accounts','catalog','requests','purchase_orders','warehouse_stock','team_inventory','projects','loss_reports','pickup_requests','suggestions','project_materials','mat_templates'];
     tables.forEach(function(t){DB.ref(t).on('value',function(snap){S[t]=snap.val()||{};if(t==='accounts')renderLoginList();refreshCurrent()})});
     DB.ref('accounts').once('value').then(function(snap){if(!snap.val())Object.entries(DEFAULT_ACCOUNTS).forEach(function(e){DB.ref('accounts/'+e[0]).set(e[1])})});
-  }catch(e){setDot('er','错误');if(g('cfg-err'))g('cfg-err').textContent='连接失败:'+e.message}
+  }catch(e){console.error('Firebase init failed:',e.message,e);setDot('er','连接失败');if(g('cfg-err'))g('cfg-err').textContent=e.message;}
 }
 
 function loadDemo(){
@@ -988,7 +988,7 @@ function doLogin(){
   g('t-av').textContent=user.initials||user.name[0];
   g('t-av').style.cssText='background:'+user.color+'22;color:'+user.color;
   g('t-uname').textContent=user.name;
-  if(!MODE)loadDemo();
+  if(!MODE){if(typeof firebase!=='undefined'&&firebase.apps&&firebase.apps.length){MODE='firebase';setDot('ok','已连接')}else{loadDemo()}}
   buildNav(user.role);
   bindAppEvents();
 }
@@ -2735,7 +2735,13 @@ return {
 
 
 
+
+
+
 </script>
+
+
+
 
 
 
