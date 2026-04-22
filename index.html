@@ -2711,8 +2711,10 @@ return {
     appId:'1:1080008893951:web:7f662e1cae3c9c5791f3ca'
   };
   try{
-    var savedCfg=localStorage.getItem('ns_fb_cfg');
-    initFB(savedCfg?JSON.parse(savedCfg):BUILT_IN_FB_CFG);
+    // 始终使用内置配置（忽略旧的本地配置）
+    localStorage.removeItem('ns_fb_cfg');
+    localStorage.removeItem('ns_demo');
+    initFB(BUILT_IN_FB_CFG);
   }catch(e){
     console.error('Firebase连接失败，切换本地模式',e);
     loadDemo();
@@ -2732,7 +2734,9 @@ return {
 
 
 
+
 </script>
+
 
 
 
