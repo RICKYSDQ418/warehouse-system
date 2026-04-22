@@ -2688,7 +2688,8 @@ return {
   renderOfficeMatAll:renderOfficeMatAll,
   switchToTmpl:switchToTmpl,
   updateTmplPreviewQty:updateTmplPreviewQty,
-  openNewProject:openNewProject,openEditProject:openEditProject,saveProject:saveProject
+  openNewProject:openNewProject,openEditProject:openEditProject,saveProject:saveProject,
+  connectFirebase:function(cfg){initFB(cfg)}
 };
 
 // ── INIT ──
@@ -2700,8 +2701,16 @@ return {
     if(!S.projects||Object.keys(S.projects).length<5){var savedAccs=S.accounts;var savedPOs=S.purchase_orders;var savedWH=S.warehouse_stock;var savedTI=S.team_inventory;seedDemo();S.accounts=savedAccs;S.purchase_orders=savedPOs;S.warehouse_stock=savedWH;S.team_inventory=savedTI;}
   }}}catch(e){}
   renderLoginList();
-  // 自动连接 Firebase（配置已内置）
-  var BUILT_IN_FB_CFG={
+  // Firebase 初始化在 IIFE 外部执行
+  localStorage.removeItem('ns_fb_cfg');
+  localStorage.removeItem('ns_demo');
+})();
+
+})(); // end APP
+
+// Firebase 初始化（APP IIFE 外部，APP 对象已就绪）
+(function(){
+  var cfg={
     apiKey:'AIzaSyCAWcR7G8F41mDK9OhAuDqkSmZ4NNiLmCA',
     authDomain:'nsroofing-material.firebaseapp.com',
     databaseURL:'https://nsroofing-material-default-rtdb.firebaseio.com',
@@ -2710,23 +2719,20 @@ return {
     messagingSenderId:'1080008893951',
     appId:'1:1080008893951:web:7f662e1cae3c9c5791f3ca'
   };
-  // 轮询等待 Firebase SDK 加载（解决异步加载时序问题）
-  localStorage.removeItem('ns_fb_cfg');
-  localStorage.removeItem('ns_demo');
-  function tryInitFB(n){
+  function tryConnect(n){
     if(typeof firebase!=='undefined'&&typeof firebase.initializeApp==='function'){
-      initFB(BUILT_IN_FB_CFG);
+      APP.connectFirebase(cfg);
     } else if(n<30){
-      setTimeout(function(){tryInitFB(n+1)},200);
+      setTimeout(function(){tryConnect(n+1)},200);
     } else {
-      console.error('Firebase SDK未能加载，使用本地模式');
-      loadDemo();
+      console.error('Firebase SDK未能加载');
     }
   }
-  tryInitFB(0);
+  tryConnect(0);
 })();
 
-})(); // end APP
+
+
 
 
 
@@ -2747,6 +2753,9 @@ return {
 
 
 </script>
+
+
+
 
 
 
