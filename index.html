@@ -772,12 +772,20 @@ textarea{resize:vertical;min-height:68px}
 </div></div>
 
 <div class="moverlay" id="mo-account"><div class="mbox">
-  <div class="mhd"><div class="mtitle" id="acc-mtitle">添加账号</div><button class="mclose" onclick="APP.closeM('mo-account')">✕</button></div>
+  <div class="mhd"><div class="mtitle" id="acc-mtitle">添加账号</div><button class="mclose" data-mo="mo-account">✕</button></div>
   <div class="mbody"><div class="fg">
     <div class="fi"><label>显示名称 *</label><input type="text" id="acc-name"></div>
     <div class="fi"><label>PIN密码 *</label><input type="password" id="acc-pin" class="mo" maxlength="8"></div>
     <div class="fi"><label>确认密码 *</label><input type="password" id="acc-pin2" class="mo" maxlength="8"></div>
-    <div class="fi full"><label>头像颜色</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-to
+    <div class="fi full"><label>头像颜色</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="color-picker"></div></div>
+  </div></div>
+  <div class="mfoot"><button class="btn btn-g" data-mo="mo-account">取消</button><button class="btn btn-p" id="btn-save-acc">保存</button></div>
+</div></div>
+
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
 // ═══════════════════════════════════════════════════
 // 所有功能封装在 APP 对象里，onclick 调用 APP.xxx()
 // 彻底避免全局函数命名和挂载问题
@@ -2790,99 +2798,7 @@ return {
   tryConnect(0);
 })();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 </script>
-sagingSenderId:'1080008893951',
-    appId:'1:1080008893951:web:7f662e1cae3c9c5791f3ca'
-  };
-  function tryConnect(n){
-    if(typeof firebase!=='undefined'&&typeof firebase.initializeApp==='function'){
-      APP.connectFirebase(cfg);
-    } else if(n<30){
-      setTimeout(function(){tryConnect(n+1)},200);
-    } else {
-      console.error('Firebase SDK未能加载');
-    }
-  }
-  tryConnect(0);
-})();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</script>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 </body>
 </html>
-
-<!-- 从模板创建材料单 -->
-<div class="moverlay" id="mo-from-tmpl"><div class="mbox">
-  <div class="mhd"><div class="mtitle">📋 从模板创建材料单</div><button class="mclose" onclick="APP.closeM('mo-from-tmpl')">✕</button></div>
-  <div class="mbody">
-    <div style="background:var(--gnd);border:1px solid rgba(34,197,94,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--gn)">
-      项目：<strong id="tmpl-from-proj"></strong>
-    </div>
-    <div id="tmpl-from-body"></div>
-  </div>
-  <div class="mfoot"><button class="btn btn-g" onclick="APP.closeM('mo-from-tmpl')">取消</button><button class="btn btn-p" onclick="APP.applyTmpl()">✓ 应用模板</button></div>
-</div></div>
