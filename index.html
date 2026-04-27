@@ -1483,19 +1483,37 @@ function parseHDLink(){
   var btn=g('btn-parse-hd');
   var status=g('parse-status');
   btn.textContent='解析中...';btn.disabled=true;
-  status.style.display='block';status.textContent='正在调用AI解析产品信息...';status.style.color='var(--tx2)';
+  status.style.display='block';status.textContent='正在解析链接...';status.style.color='var(--tx2)';
+
+  // 从URL提取产品编号（SKU）
+  var skuMatch=url.match(/[\/?&]([0-9]{6,10})(?:[\/?&#]|$)/);
+  if(!skuMatch){
+    // 尝试从URL末尾提取数字
+    skuMatch=url.match(/\/([0-9]{6,10})(?:\.html)?(?:[\?#].*)?$/);
+  }
+  var extractedSku=skuMatch?skuMatch[1]:'';
+
+  // 从URL提取产品名称（URL路径部分）
+  var pathMatch=url.match(/\/product\/([^/\?#]+)/i);
+  var urlName=pathMatch?pathMatch[1].replace(/-/g,' '):'';
+
+  // 用 Claude API（内置支持）
   fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:{
+      'Content-Type':'application/json',
+      'anthropic-dangerous-allow-browser':'true',
+      'anthropic-version':'2023-06-01'
+    },
     body:JSON.stringify({
       model:'claude-sonnet-4-20250514',
-      max_tokens:500,
+      max_tokens:300,
       messages:[{
         role:'user',
-        content:'请根据这个Home Depot Canada产品链接，提供以下信息（只返回JSON，不要其他文字）：\n'
-          +'链接：'+url+'\n'
-          +'返回格式：{"name_zh":"中文产品名称（简洁，15字以内）","sku":"HD产品编号（纯数字，从URL或产品页提取）","category":"类别（从以下选一个：耗材/工具/配件/安全/特殊）","unit":"单位（个/箱/卷/包/套/桶/张）"}\n'
-          +'注意：SKU是HD产品编号，通常是7-10位数字，可从URL末尾或产品描述中找到'
+        content:'根据这个Home Depot产品URL路径，给出中文产品名称和分类（只返回JSON）：\n'
+          +'URL: '+url+'\n'
+          +'URL中的产品名: '+urlName+'\n'
+          +'返回格式: {"name_zh":"中文名称(10字内)","category":"耗材或工具或配件或安全或特殊","unit":"个或箱或卷或包或套"}'
       }]
     })
   })
@@ -1503,36 +1521,44 @@ function parseHDLink(){
   .then(function(data){
     btn.textContent='🤖 AI解析';btn.disabled=false;
     if(data.error){
-      status.textContent='解析失败：'+data.error.message;
-      status.style.color='var(--rd)';
+      // API调用失败，用URL自动解析
+      useUrlParse(url,urlName,extractedSku,status);
       return;
     }
     var text=data.content&&data.content[0]&&data.content[0].text||'';
     try{
-      // 提取JSON
       var match=text.match(/\{[\s\S]+\}/);
-      if(!match)throw new Error('无法解析返回内容');
+      if(!match)throw new Error('no json');
       var result=JSON.parse(match[0]);
-      // 填入表单
-      if(result.name_zh){g('cat-name').value=result.name_zh}
-      if(result.sku){g('cat-sku').value=result.sku}
-      if(result.category){g('cat-cat').value=result.category}
-      if(result.unit){g('cat-unit').value=result.unit}
-      status.textContent='✅ 解析完成！请确认信息后保存。';
+      if(result.name_zh)g('cat-name').value=result.name_zh;
+      if(extractedSku)g('cat-sku').value=extractedSku;
+      if(result.category)g('cat-cat').value=result.category;
+      if(result.unit)g('cat-unit').value=result.unit;
+      status.textContent='✅ 解析完成，请确认后保存';
       status.style.color='var(--gn)';
     }catch(err){
-      status.textContent='⚠️ AI返回内容无法解析，请手动填写';
-      status.style.color='var(--ye)';
-      console.log('AI返回:', text);
+      useUrlParse(url,urlName,extractedSku,status);
     }
   })
-  .catch(function(err){
+  .catch(function(){
     btn.textContent='🤖 AI解析';btn.disabled=false;
-    status.textContent='网络错误：'+err.message;
-    status.style.color='var(--rd)';
+    useUrlParse(url,urlName,extractedSku,status);
   });
 }
 
+function useUrlParse(url,urlName,sku,status){
+  // 降级方案：从URL直接解析
+  if(sku)g('cat-sku').value=sku;
+  if(urlName){
+    // 简单清理URL名称
+    var name=urlName.replace(/\b(\w)/g,function(m){return m.toUpperCase()});
+    g('cat-name').value=name.slice(0,30);
+  }
+  if(status){
+    status.textContent='已从链接提取基本信息，请补充中文名称';
+    status.style.color='var(--ye)';
+  }
+}
 
 function saveCatalog(){
   var sku=g('cat-sku').value.trim(),name=g('cat-name').value.trim();
@@ -2756,7 +2782,8 @@ return {
   updateTmplPreviewQty:updateTmplPreviewQty,
   openNewProject:openNewProject,openEditProject:openEditProject,saveProject:saveProject,
   connectFirebase:function(cfg){initFB(cfg)},
-  parseHDLink:parseHDLink
+  parseHDLink:parseHDLink,
+  useUrlParse:useUrlParse
 };
 
 // ── INIT ──
@@ -2798,7 +2825,9 @@ return {
   tryConnect(0);
 })();
 
+
 </script>
+
 
 </body>
 </html>
