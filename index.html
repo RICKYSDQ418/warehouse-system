@@ -557,7 +557,14 @@ textarea{resize:vertical;min-height:68px}
     <div class="fi"><label>名称 *</label><input type="text" id="cat-name" placeholder="屋顶钉 2.5in"></div>
     <div class="fi"><label>类别</label><select id="cat-cat"><option>耗材</option><option>工具</option><option>配件</option><option>安全</option><option>特殊</option></select></div>
     <div class="fi"><label>单位</label><input type="text" id="cat-unit" placeholder="箱/个/卷"></div>
-    <div class="fi full"><label>HD链接</label><input type="url" id="cat-hd" class="mo" placeholder="https://www.homedepot.ca/..."></div>
+    <div class="fi full">
+      <label>HD链接 <span style="font-size:11px;color:var(--tx2)">（粘贴链接后点「AI解析」自动填写）</span></label>
+      <div style="display:flex;gap:8px">
+        <input type="url" id="cat-hd" class="mo" placeholder="https://www.homedepot.ca/..." style="flex:1">
+        <button class="btn btn-s" type="button" onclick="APP.parseHDLink()" id="btn-parse-hd" style="white-space:nowrap;flex-shrink:0">🤖 AI解析</button>
+      </div>
+      <div id="parse-status" style="font-size:12px;color:var(--tx2);margin-top:4px;display:none"></div>
+    </div></div>
     <div class="fi full"><label>备注</label><textarea id="cat-notes" placeholder="规格说明..."></textarea></div>
   </div></div>
   <div class="mfoot"><button class="btn btn-g" onclick="APP.closeM('mo-catalog')">取消</button><button class="btn btn-p" onclick="APP.saveCatalog()">保存</button></div>
@@ -770,14 +777,7 @@ textarea{resize:vertical;min-height:68px}
     <div class="fi"><label>显示名称 *</label><input type="text" id="acc-name"></div>
     <div class="fi"><label>PIN密码 *</label><input type="password" id="acc-pin" class="mo" maxlength="8"></div>
     <div class="fi"><label>确认密码 *</label><input type="password" id="acc-pin2" class="mo" maxlength="8"></div>
-    <div class="fi full"><label>头像颜色</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="color-picker"></div></div>
-  </div></div>
-  <div class="mfoot"><button class="btn btn-g" onclick="APP.closeM('mo-account')">取消</button><button class="btn btn-p" onclick="APP.saveAccount()">保存</button></div>
-</div></div>
-
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-<script>
+    <div class="fi full"><label>头像颜色</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-to
 // ═══════════════════════════════════════════════════
 // 所有功能封装在 APP 对象里，onclick 调用 APP.xxx()
 // 彻底避免全局函数命名和挂载问题
@@ -1467,6 +1467,64 @@ function editCatalog(id){
   g('cat-sku').value=c.sku;g('cat-name').value=c.name;g('cat-cat').value=c.category;g('cat-unit').value=c.unit;g('cat-hd').value=c.hdLink||'';g('cat-notes').value=c.notes||'';
   openM('mo-catalog');
 }
+
+// ── HD链接 AI 解析 ──
+function parseHDLink(){
+  var url=g('cat-hd').value.trim();
+  if(!url||!url.startsWith('http')){alert('请先输入有效的HD链接');return}
+  var btn=g('btn-parse-hd');
+  var status=g('parse-status');
+  btn.textContent='解析中...';btn.disabled=true;
+  status.style.display='block';status.textContent='正在调用AI解析产品信息...';status.style.color='var(--tx2)';
+  fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',
+      max_tokens:500,
+      messages:[{
+        role:'user',
+        content:'请根据这个Home Depot Canada产品链接，提供以下信息（只返回JSON，不要其他文字）：\n'
+          +'链接：'+url+'\n'
+          +'返回格式：{"name_zh":"中文产品名称（简洁，15字以内）","sku":"HD产品编号（纯数字，从URL或产品页提取）","category":"类别（从以下选一个：耗材/工具/配件/安全/特殊）","unit":"单位（个/箱/卷/包/套/桶/张）"}\n'
+          +'注意：SKU是HD产品编号，通常是7-10位数字，可从URL末尾或产品描述中找到'
+      }]
+    })
+  })
+  .then(function(r){return r.json()})
+  .then(function(data){
+    btn.textContent='🤖 AI解析';btn.disabled=false;
+    if(data.error){
+      status.textContent='解析失败：'+data.error.message;
+      status.style.color='var(--rd)';
+      return;
+    }
+    var text=data.content&&data.content[0]&&data.content[0].text||'';
+    try{
+      // 提取JSON
+      var match=text.match(/\{[\s\S]+\}/);
+      if(!match)throw new Error('无法解析返回内容');
+      var result=JSON.parse(match[0]);
+      // 填入表单
+      if(result.name_zh){g('cat-name').value=result.name_zh}
+      if(result.sku){g('cat-sku').value=result.sku}
+      if(result.category){g('cat-cat').value=result.category}
+      if(result.unit){g('cat-unit').value=result.unit}
+      status.textContent='✅ 解析完成！请确认信息后保存。';
+      status.style.color='var(--gn)';
+    }catch(err){
+      status.textContent='⚠️ AI返回内容无法解析，请手动填写';
+      status.style.color='var(--ye)';
+      console.log('AI返回:', text);
+    }
+  })
+  .catch(function(err){
+    btn.textContent='🤖 AI解析';btn.disabled=false;
+    status.textContent='网络错误：'+err.message;
+    status.style.color='var(--rd)';
+  });
+}
+
 
 function saveCatalog(){
   var sku=g('cat-sku').value.trim(),name=g('cat-name').value.trim();
@@ -2689,7 +2747,8 @@ return {
   switchToTmpl:switchToTmpl,
   updateTmplPreviewQty:updateTmplPreviewQty,
   openNewProject:openNewProject,openEditProject:openEditProject,saveProject:saveProject,
-  connectFirebase:function(cfg){initFB(cfg)}
+  connectFirebase:function(cfg){initFB(cfg)},
+  parseHDLink:parseHDLink
 };
 
 // ── INIT ──
@@ -2717,6 +2776,44 @@ return {
     projectId:'nsroofing-material',
     storageBucket:'nsroofing-material.firebasestorage.app',
     messagingSenderId:'1080008893951',
+    appId:'1:1080008893951:web:7f662e1cae3c9c5791f3ca'
+  };
+  function tryConnect(n){
+    if(typeof firebase!=='undefined'&&typeof firebase.initializeApp==='function'){
+      APP.connectFirebase(cfg);
+    } else if(n<30){
+      setTimeout(function(){tryConnect(n+1)},200);
+    } else {
+      console.error('Firebase SDK未能加载');
+    }
+  }
+  tryConnect(0);
+})();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</script>
+sagingSenderId:'1080008893951',
     appId:'1:1080008893951:web:7f662e1cae3c9c5791f3ca'
   };
   function tryConnect(n){
