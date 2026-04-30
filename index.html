@@ -1482,83 +1482,135 @@ function parseHDLink(){
   if(!url||!url.startsWith('http')){alert('请先输入有效的HD链接');return}
   var btn=g('btn-parse-hd');
   var status=g('parse-status');
-  btn.textContent='解析中...';btn.disabled=true;
-  status.style.display='block';status.textContent='正在解析链接...';status.style.color='var(--tx2)';
+  btn.textContent='翻译中...';btn.disabled=true;
+  status.style.display='block';status.textContent='正在提取产品信息...';status.style.color='var(--tx2)';
 
-  // 从URL提取产品编号（SKU）
-  var skuMatch=url.match(/[\/?&]([0-9]{6,10})(?:[\/?&#]|$)/);
-  if(!skuMatch){
-    // 尝试从URL末尾提取数字
-    skuMatch=url.match(/\/([0-9]{6,10})(?:\.html)?(?:[\?#].*)?$/);
+  // 从URL提取SKU（6-10位数字）
+  var skuMatch=url.match(/[\/\-](\d{6,10})(?:[\/\?\#]|$)/)||url.match(/(\d{6,10})(?:\.html)?(?:[\?#].*)?$/);
+  var sku=skuMatch?skuMatch[1]:'';
+
+  // 从URL路径提取英文产品名
+  var pathMatch=url.match(/\/product\/([^\/\?#]+)/i);
+  var urlSlug=pathMatch?pathMatch[1]:'';
+
+  // 清理成英文句子（去连字符，首字母大写）
+  var engName=urlSlug
+    .replace(/-/g,' ')
+    .replace(/[^a-zA-Z0-9\s]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+
+  if(!engName){
+    btn.textContent='🤖 AI解析';btn.disabled=false;
+    if(sku)g('cat-sku').value=sku;
+    status.textContent='⚠️ 无法从链接提取产品名，请手动填写';
+    status.style.color='var(--ye)';
+    return;
   }
-  var extractedSku=skuMatch?skuMatch[1]:'';
 
-  // 从URL提取产品名称（URL路径部分）
-  var pathMatch=url.match(/\/product\/([^/\?#]+)/i);
-  var urlName=pathMatch?pathMatch[1].replace(/-/g,' '):'';
+  // 先用词典匹配（最准确）
+  var DICT=[
+    {keys:['ice','water','shield'],zh:'冰水盾防水卷材',cat:'耗材',unit:'卷'},
+    {keys:['underlayment','synthetic'],zh:'合成防水衬垫',cat:'耗材',unit:'卷'},
+    {keys:['underlayment','felt'],zh:'沥青毡防水层',cat:'耗材',unit:'卷'},
+    {keys:['underlayment'],zh:'屋顶防水衬垫',cat:'耗材',unit:'卷'},
+    {keys:['architectural','shingle'],zh:'建筑级沥青瓦',cat:'耗材',unit:'箱'},
+    {keys:['shingle','ridge','cap'],zh:'屋脊盖瓦',cat:'耗材',unit:'箱'},
+    {keys:['starter','strip'],zh:'起始条',cat:'耗材',unit:'箱'},
+    {keys:['shingle'],zh:'沥青瓦',cat:'耗材',unit:'箱'},
+    {keys:['metal','roofing','panel'],zh:'金属屋顶板',cat:'耗材',unit:'块'},
+    {keys:['coil','roofing','nail'],zh:'盘装屋顶钉',cat:'耗材',unit:'箱'},
+    {keys:['roofing','nail'],zh:'屋顶钉',cat:'耗材',unit:'箱'},
+    {keys:['cap','nail'],zh:'塑料帽钉',cat:'耗材',unit:'箱'},
+    {keys:['drip','edge'],zh:'滴水边条',cat:'配件',unit:'条'},
+    {keys:['step','flashing'],zh:'台阶泛水板',cat:'配件',unit:'包'},
+    {keys:['pipe','boot'],zh:'管道防水靴',cat:'配件',unit:'个'},
+    {keys:['flashing','tape'],zh:'防水胶带',cat:'耗材',unit:'卷'},
+    {keys:['ridge','vent'],zh:'屋脊通风条',cat:'配件',unit:'条'},
+    {keys:['soffit','vent'],zh:'檐口通风板',cat:'配件',unit:'块'},
+    {keys:['roof','vent'],zh:'屋顶通风帽',cat:'配件',unit:'个'},
+    {keys:['safety','harness'],zh:'安全带',cat:'安全',unit:'套'},
+    {keys:['hard','hat'],zh:'安全帽',cat:'安全',unit:'个'},
+    {keys:['knee','pad'],zh:'护膝',cat:'安全',unit:'副'},
+    {keys:['roofing','cement'],zh:'屋顶沥青胶',cat:'耗材',unit:'桶'},
+    {keys:['sealant'],zh:'密封胶',cat:'耗材',unit:'支'},
+    {keys:['caulk','gun'],zh:'打胶枪',cat:'工具',unit:'个'},
+    {keys:['tin','snip'],zh:'铁皮剪刀',cat:'工具',unit:'个'},
+    {keys:['chalk','line'],zh:'墨线',cat:'工具',unit:'个'},
+    {keys:['utility','knife'],zh:'美工刀',cat:'工具',unit:'个'},
+    {keys:['pry','bar'],zh:'撬棍',cat:'工具',unit:'个'},
+    {keys:['ladder'],zh:'梯子',cat:'工具',unit:'个'},
+    {keys:['gutter','guard'],zh:'落水槽防叶网',cat:'配件',unit:'米'},
+    {keys:['downspout'],zh:'落水管',cat:'配件',unit:'根'},
+    {keys:['vinyl','siding'],zh:'乙烯基外墙板',cat:'耗材',unit:'箱'},
+    {keys:['house','wrap'],zh:'防潮膜',cat:'耗材',unit:'卷'},
+    {keys:['insulation','batt'],zh:'保温棉卷',cat:'耗材',unit:'包'},
+    {keys:['snow','guard'],zh:'防雪板',cat:'配件',unit:'个'},
+  ];
 
-  // 用 Claude API（内置支持）
-  fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'anthropic-dangerous-allow-browser':'true',
-      'anthropic-version':'2023-06-01'
-    },
-    body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',
-      max_tokens:300,
-      messages:[{
-        role:'user',
-        content:'根据这个Home Depot产品URL路径，给出中文产品名称和分类（只返回JSON）：\n'
-          +'URL: '+url+'\n'
-          +'URL中的产品名: '+urlName+'\n'
-          +'返回格式: {"name_zh":"中文名称(10字内)","category":"耗材或工具或配件或安全或特殊","unit":"个或箱或卷或包或套"}'
-      }]
-    })
-  })
+  var slug=urlSlug.toLowerCase();
+  var matched=null;
+  for(var i=0;i<DICT.length;i++){
+    var d=DICT[i];
+    if(d.keys.every(function(k){return slug.indexOf(k)>=0})){matched=d;break}
+  }
+
+  if(matched){
+    if(sku)g('cat-sku').value=sku;
+    g('cat-name').value=matched.zh;
+    g('cat-cat').value=matched.cat;
+    g('cat-unit').value=matched.unit;
+    btn.textContent='🤖 AI解析';btn.disabled=false;
+    status.textContent='✅ 已识别「'+matched.zh+'」，请确认后保存';
+    status.style.color='var(--gn)';
+    return;
+  }
+
+  // 词典未匹配 → 调用 MyMemory 免费翻译 API
+  status.textContent='调用翻译API...';
+  var apiUrl='https://api.mymemory.translated.net/get?q='+encodeURIComponent(engName)+'&langpair=en|zh';
+  fetch(apiUrl)
   .then(function(r){return r.json()})
   .then(function(data){
     btn.textContent='🤖 AI解析';btn.disabled=false;
-    if(data.error){
-      // API调用失败，用URL自动解析
-      useUrlParse(url,urlName,extractedSku,status);
-      return;
-    }
-    var text=data.content&&data.content[0]&&data.content[0].text||'';
-    try{
-      var match=text.match(/\{[\s\S]+\}/);
-      if(!match)throw new Error('no json');
-      var result=JSON.parse(match[0]);
-      if(result.name_zh)g('cat-name').value=result.name_zh;
-      if(extractedSku)g('cat-sku').value=extractedSku;
-      if(result.category)g('cat-cat').value=result.category;
-      if(result.unit)g('cat-unit').value=result.unit;
-      status.textContent='✅ 解析完成，请确认后保存';
-      status.style.color='var(--gn)';
-    }catch(err){
-      useUrlParse(url,urlName,extractedSku,status);
+    if(sku)g('cat-sku').value=sku;
+    var zhName='';
+    if(data&&data.responseStatus===200&&data.responseData){
+      zhName=data.responseData.translatedText||'';
+      // 过滤掉返回还是英文的情况
+      if(zhName&&/[\u4e00-\u9fff]/.test(zhName)){
+        // 截断太长的
+        zhName=zhName.slice(0,20);
+        g('cat-name').value=zhName;
+        status.textContent='✅ 翻译完成「'+zhName+'」，请确认';
+        status.style.color='var(--gn)';
+      } else {
+        // 翻译结果没有中文
+        g('cat-name').value=engName.slice(0,30);
+        status.textContent='⚠️ 翻译结果异常，请手动修改名称';
+        status.style.color='var(--ye)';
+      }
+    } else {
+      g('cat-name').value=engName.slice(0,30);
+      status.textContent='⚠️ 翻译失败，请手动填写中文名称';
+      status.style.color='var(--ye)';
     }
   })
   .catch(function(){
     btn.textContent='🤖 AI解析';btn.disabled=false;
-    useUrlParse(url,urlName,extractedSku,status);
+    if(sku)g('cat-sku').value=sku;
+    g('cat-name').value=engName.slice(0,30);
+    status.textContent='⚠️ 网络问题，请手动填写中文名称';
+    status.style.color='var(--ye)';
   });
 }
 
 function useUrlParse(url,urlName,sku,status){
-  // 降级方案：从URL直接解析
   if(sku)g('cat-sku').value=sku;
-  if(urlName){
-    // 简单清理URL名称
-    var name=urlName.replace(/\b(\w)/g,function(m){return m.toUpperCase()});
-    g('cat-name').value=name.slice(0,30);
-  }
-  if(status){
-    status.textContent='已从链接提取基本信息，请补充中文名称';
-    status.style.color='var(--ye)';
-  }
+  if(urlName)g('cat-name').value=urlName.slice(0,30);
+  if(status){status.textContent='已提取基本信息，请补充中文名称';status.style.color='var(--ye)';}
 }
+
 
 function saveCatalog(){
   var sku=g('cat-sku').value.trim(),name=g('cat-name').value.trim();
@@ -2826,7 +2878,11 @@ return {
 })();
 
 
+
+
 </script>
+
+
 
 
 </body>
