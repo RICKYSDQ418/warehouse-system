@@ -1482,40 +1482,27 @@ function parseHDLink(){
   if(!url||!url.startsWith('http')){alert('请先输入有效的HD链接');return}
   var btn=g('btn-parse-hd');
   var status=g('parse-status');
-  btn.textContent='翻译中...';btn.disabled=true;
-  status.style.display='block';status.textContent='正在提取产品信息...';status.style.color='var(--tx2)';
+  btn.textContent='解析中...';btn.disabled=true;
+  status.style.display='block';status.textContent='正在获取产品信息...';status.style.color='var(--tx2)';
 
-  // 从URL提取SKU（6-10位数字）
+  // 从URL提取SKU
   var skuMatch=url.match(/[\/\-](\d{6,10})(?:[\/\?\#]|$)/)||url.match(/(\d{6,10})(?:\.html)?(?:[\?#].*)?$/);
   var sku=skuMatch?skuMatch[1]:'';
 
   // 从URL路径提取英文产品名
   var pathMatch=url.match(/\/product\/([^\/\?#]+)/i);
   var urlSlug=pathMatch?pathMatch[1]:'';
+  // 去掉纯数字的slug（只有编号没有名称）
+  var slugHasName=urlSlug&&!/^\d+$/.test(urlSlug.replace(/-/g,''));
 
-  // 清理成英文句子（去连字符，首字母大写）
-  var engName=urlSlug
-    .replace(/-/g,' ')
-    .replace(/[^a-zA-Z0-9\s]/g,' ')
-    .replace(/\s+/g,' ')
-    .trim();
-
-  if(!engName){
-    btn.textContent='🤖 AI解析';btn.disabled=false;
-    if(sku)g('cat-sku').value=sku;
-    status.textContent='⚠️ 无法从链接提取产品名，请手动填写';
-    status.style.color='var(--ye)';
-    return;
-  }
-
-  // 先用词典匹配（最准确）
+  // 词典匹配
   var DICT=[
     {keys:['ice','water','shield'],zh:'冰水盾防水卷材',cat:'耗材',unit:'卷'},
     {keys:['underlayment','synthetic'],zh:'合成防水衬垫',cat:'耗材',unit:'卷'},
     {keys:['underlayment','felt'],zh:'沥青毡防水层',cat:'耗材',unit:'卷'},
     {keys:['underlayment'],zh:'屋顶防水衬垫',cat:'耗材',unit:'卷'},
     {keys:['architectural','shingle'],zh:'建筑级沥青瓦',cat:'耗材',unit:'箱'},
-    {keys:['shingle','ridge','cap'],zh:'屋脊盖瓦',cat:'耗材',unit:'箱'},
+    {keys:['ridge','cap'],zh:'屋脊盖瓦',cat:'耗材',unit:'箱'},
     {keys:['starter','strip'],zh:'起始条',cat:'耗材',unit:'箱'},
     {keys:['shingle'],zh:'沥青瓦',cat:'耗材',unit:'箱'},
     {keys:['metal','roofing','panel'],zh:'金属屋顶板',cat:'耗材',unit:'块'},
@@ -1546,63 +1533,115 @@ function parseHDLink(){
     {keys:['house','wrap'],zh:'防潮膜',cat:'耗材',unit:'卷'},
     {keys:['insulation','batt'],zh:'保温棉卷',cat:'耗材',unit:'包'},
     {keys:['snow','guard'],zh:'防雪板',cat:'配件',unit:'个'},
+    {keys:['staple','gun'],zh:'重型订书枪',cat:'工具',unit:'个'},
+    {keys:['brad','nail'],zh:'无头钉',cat:'耗材',unit:'箱'},
+    {keys:['framing','nail'],zh:'框架钉',cat:'耗材',unit:'箱'},
+    {keys:['screw'],zh:'螺丝',cat:'耗材',unit:'箱'},
+    {keys:['hammer'],zh:'锤子',cat:'工具',unit:'个'},
+    {keys:['scissors'],zh:'剪刀',cat:'工具',unit:'个'},
+    {keys:['glove'],zh:'手套',cat:'安全',unit:'副'},
+    {keys:['safety','glasses'],zh:'护目镜',cat:'安全',unit:'个'},
   ];
 
-  var slug=urlSlug.toLowerCase();
-  var matched=null;
-  for(var i=0;i<DICT.length;i++){
-    var d=DICT[i];
-    if(d.keys.every(function(k){return slug.indexOf(k)>=0})){matched=d;break}
+  function matchDict(slug){
+    var sl=slug.toLowerCase();
+    for(var i=0;i<DICT.length;i++){
+      if(DICT[i].keys.every(function(k){return sl.indexOf(k)>=0}))return DICT[i];
+    }
+    return null;
   }
 
-  if(matched){
-    if(sku)g('cat-sku').value=sku;
-    g('cat-name').value=matched.zh;
-    g('cat-cat').value=matched.cat;
-    g('cat-unit').value=matched.unit;
-    btn.textContent='🤖 AI解析';btn.disabled=false;
-    status.textContent='✅ 已识别「'+matched.zh+'」，请确认后保存';
-    status.style.color='var(--gn)';
-    return;
-  }
-
-  // 词典未匹配 → 调用 MyMemory 免费翻译 API
-  status.textContent='调用翻译API...';
-  var apiUrl='https://api.mymemory.translated.net/get?q='+encodeURIComponent(engName)+'&langpair=en|zh';
-  fetch(apiUrl)
-  .then(function(r){return r.json()})
-  .then(function(data){
-    btn.textContent='🤖 AI解析';btn.disabled=false;
-    if(sku)g('cat-sku').value=sku;
-    var zhName='';
-    if(data&&data.responseStatus===200&&data.responseData){
-      zhName=data.responseData.translatedText||'';
-      // 过滤掉返回还是英文的情况
-      if(zhName&&/[\u4e00-\u9fff]/.test(zhName)){
-        // 截断太长的
-        zhName=zhName.slice(0,20);
-        g('cat-name').value=zhName;
-        status.textContent='✅ 翻译完成「'+zhName+'」，请确认';
+  function translateAndFill(engText, sku){
+    if(!engText||/^\d+$/.test(engText.replace(/[\s\-]/g,''))){
+      // 纯数字，无法翻译
+      if(sku)g('cat-sku').value=sku;
+      status.textContent='⚠️ 链接不含产品名称，请手动填写（SKU已提取）';
+      status.style.color='var(--ye)';
+      btn.textContent='🤖 AI解析';btn.disabled=false;
+      return;
+    }
+    status.textContent='正在翻译「'+engText.slice(0,30)+'」...';
+    fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(engText)+'&langpair=en|zh')
+    .then(function(r){return r.json()})
+    .then(function(data){
+      btn.textContent='🤖 AI解析';btn.disabled=false;
+      if(sku)g('cat-sku').value=sku;
+      var zh=data&&data.responseData&&data.responseData.translatedText||'';
+      if(zh&&/[\u4e00-\u9fff]/.test(zh)){
+        g('cat-name').value=zh.slice(0,20);
+        status.textContent='✅ 翻译完成「'+zh.slice(0,20)+'」，请确认';
         status.style.color='var(--gn)';
       } else {
-        // 翻译结果没有中文
-        g('cat-name').value=engName.slice(0,30);
+        g('cat-name').value=engText.slice(0,30);
         status.textContent='⚠️ 翻译结果异常，请手动修改名称';
         status.style.color='var(--ye)';
       }
-    } else {
-      g('cat-name').value=engName.slice(0,30);
-      status.textContent='⚠️ 翻译失败，请手动填写中文名称';
+    })
+    .catch(function(){
+      btn.textContent='🤖 AI解析';btn.disabled=false;
+      if(sku)g('cat-sku').value=sku;
+      g('cat-name').value=engText.slice(0,30);
+      status.textContent='⚠️ 翻译失败，请手动填写';
       status.style.color='var(--ye)';
+    });
+  }
+
+  // 1. 词典匹配（有slug才匹配）
+  if(slugHasName){
+    var matched=matchDict(urlSlug);
+    if(matched){
+      if(sku)g('cat-sku').value=sku;
+      g('cat-name').value=matched.zh;
+      g('cat-cat').value=matched.cat;
+      g('cat-unit').value=matched.unit;
+      btn.textContent='🤖 AI解析';btn.disabled=false;
+      status.textContent='✅ 已识别「'+matched.zh+'」';
+      status.style.color='var(--gn)';
+      return;
     }
-  })
-  .catch(function(){
-    btn.textContent='🤖 AI解析';btn.disabled=false;
-    if(sku)g('cat-sku').value=sku;
-    g('cat-name').value=engName.slice(0,30);
-    status.textContent='⚠️ 网络问题，请手动填写中文名称';
-    status.style.color='var(--ye)';
-  });
+    // 词典未中，用slug翻译
+    var engName=urlSlug.replace(/-/g,' ').replace(/[^a-zA-Z0-9\s]/g,' ').trim();
+    translateAndFill(engName, sku);
+    return;
+  }
+
+  // 2. 只有数字SKU：尝试抓取HD产品页标题（用allorigins代理）
+  if(sku){
+    status.textContent='正在获取产品标题...';
+    var proxyUrl='https://api.allorigins.win/get?url='+encodeURIComponent('https://www.homedepot.ca/product/'+sku);
+    fetch(proxyUrl)
+    .then(function(r){return r.json()})
+    .then(function(data){
+      var html=data.contents||'';
+      // 提取 <title> 或 og:title
+      var titleMatch=html.match(/<title[^>]*>([^<]+)<\/title>/i)||html.match(/og:title.*?content="([^"]+)"/i);
+      var rawTitle=titleMatch?titleMatch[1].replace(/\s*[\|\-].*$/,'').trim():'';
+      // 去掉 "Home Depot" 字样
+      rawTitle=rawTitle.replace(/home depot/gi,'').replace(/homedepot/gi,'').trim();
+      if(rawTitle&&rawTitle.length>2&&!/^\d+$/.test(rawTitle)){
+        // 有英文标题，翻译
+        translateAndFill(rawTitle, sku);
+      } else {
+        // 抓不到标题
+        if(sku)g('cat-sku').value=sku;
+        btn.textContent='🤖 AI解析';btn.disabled=false;
+        status.textContent='⚠️ 无法获取产品名，请手动填写（SKU已提取）';
+        status.style.color='var(--ye)';
+      }
+    })
+    .catch(function(){
+      if(sku)g('cat-sku').value=sku;
+      btn.textContent='🤖 AI解析';btn.disabled=false;
+      status.textContent='⚠️ 无法获取产品信息，请手动填写';
+      status.style.color='var(--ye)';
+    });
+    return;
+  }
+
+  // 3. 啥都没有
+  btn.textContent='🤖 AI解析';btn.disabled=false;
+  status.textContent='⚠️ 链接格式无法识别，请手动填写';
+  status.style.color='var(--ye)';
 }
 
 function useUrlParse(url,urlName,sku,status){
@@ -2880,7 +2919,9 @@ return {
 
 
 
+
 </script>
+
 
 
 
