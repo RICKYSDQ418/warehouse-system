@@ -439,7 +439,7 @@ textarea{resize:vertical;min-height:68px}
     </div>
 
     <div class="page" id="pg-mgmt-acc">
-      <div class="ph"><div><div class="ptitle">👥 账号管理</div></div></div>
+      <div class="ph"><div><div class="ptitle">👥 账号管理</div></div><button class="btn btn-s" onclick="APP.restoreDefaults()">♻️ 恢复默认账号</button></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px">
         <div class="card"><div class="chd"><span class="ctitle">🔨 安装队账号</span><button class="btn btn-sm btn-p" id="btn-add-crew">＋ 添加队伍</button></div><div style="padding:14px;display:flex;flex-direction:column;gap:10px" id="crew-acc-list"></div></div>
         <div class="card"><div class="chd"><span class="ctitle">🏢 办公室账号</span><button class="btn btn-sm btn-p" id="btn-add-office">＋ 添加账号</button></div><div style="padding:14px;display:flex;flex-direction:column;gap:10px" id="office-acc-list"></div></div>
@@ -772,14 +772,14 @@ textarea{resize:vertical;min-height:68px}
 </div></div>
 
 <div class="moverlay" id="mo-account"><div class="mbox">
-  <div class="mhd"><div class="mtitle" id="acc-mtitle">添加账号</div><button class="mclose" data-mo="mo-account">✕</button></div>
+  <div class="mhd"><div class="mtitle" id="acc-mtitle">添加账号</div><button class="mclose" onclick="APP.closeM('mo-account')">✕</button></div>
   <div class="mbody"><div class="fg">
     <div class="fi"><label>显示名称 *</label><input type="text" id="acc-name"></div>
     <div class="fi"><label>PIN密码 *</label><input type="password" id="acc-pin" class="mo" maxlength="8"></div>
     <div class="fi"><label>确认密码 *</label><input type="password" id="acc-pin2" class="mo" maxlength="8"></div>
     <div class="fi full"><label>头像颜色</label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px" id="color-picker"></div></div>
   </div></div>
-  <div class="mfoot"><button class="btn btn-g" data-mo="mo-account">取消</button><button class="btn btn-p" id="btn-save-acc">保存</button></div>
+  <div class="mfoot"><button class="btn btn-g" onclick="APP.closeM('mo-account')">取消</button><button class="btn btn-p" onclick="APP.saveAccount()">保存</button></div>
 </div></div>
 
 
@@ -806,7 +806,7 @@ var DEFAULT_ACCOUNTS={
 };
 var NAV={
   crew:[{id:'crew-req',l:'📋 我的申请'},{id:'crew-inv',l:'🧰 队伍库存'},{id:'crew-loss',l:'⚠️ 报损'},{id:'crew-pickup',l:'📦 领取申请'},{id:'crew-mat',l:'📋 项目材料单'},{id:'crew-suggest',l:'💡 建议物料'}],
-  office:[{id:'office-approval',l:'✅ 审批'},{id:'office-po',l:'🛒 采购单'},{id:'office-warehouse',l:'🏭 仓库'},{id:'office-mat',l:'📋 项目材料单'},{id:'office-tmpl',l:'📋 材料模板'},{id:'office-pickup',l:'🤝 领取审核'},{id:'office-catalog',l:'📦 材料库'},{id:'office-suggest',l:'📥 物料建议'},{id:'office-loss',l:'🔄 报损核对'},{id:'office-proj',l:'🏗️ 项目管理'}],
+  office:[{id:'office-approval',l:'✅ 审批'},{id:'office-po',l:'🛒 采购单'},{id:'office-warehouse',l:'🏭 仓库'},{id:'office-mat',l:'📋 项目材料单'},{id:'office-tmpl',l:'📋 材料模板'},{id:'office-pickup',l:'🤝 领取审核'},{id:'office-catalog',l:'📦 材料库'},{id:'office-suggest',l:'📥 物料建议'},{id:'office-loss',l:'🔄 报损核对'},{id:'office-proj',l:'🏗️ 项目管理'},{id:'mgmt-acc',l:'👥 账号管理'}],
   mgmt:[{id:'mgmt-dash',l:'📊 总览'},{id:'mgmt-mat',l:'📋 材料汇总'},{id:'mgmt-inv',l:'🧰 库存'},{id:'mgmt-acc',l:'👥 账号管理'}]
 };
 
@@ -829,7 +829,7 @@ function crews(){return Object.entries(S.accounts).filter(function(e){return e[1
 function offices(){return Object.entries(S.accounts).filter(function(e){return e[1].role==='office'})}
 function myId(){return CU&&CU.id}
 function myName(){return CU&&CU.name}
-function genPO(){return'PO-'+new Date().getFullYear()+'-'+String(Object.keys(S.purchase_orders).length+1).padStart(3,'0')}
+function genPO(){var yr=new Date().getFullYear();var nums=Object.values(S.purchase_orders||{}).map(function(p){var m=(p.poNumber||'').match(/PO-\d+-(\d+)/);return m?parseInt(m[1]):0});var max=nums.length?Math.max.apply(null,nums):0;return'PO-'+yr+'-'+String(max+1).padStart(3,'0')}
 
 function openM(id){var el=g(id);if(el)el.classList.add('act')}
 function closeM(id){var el=g(id);if(el)el.classList.remove('act')}
@@ -1833,6 +1833,13 @@ function saveProject(){
 // 兼容旧的 addProject 调用
 function addProject(){openNewProject()}
 
+function restoreDefaults(){
+  var missing=Object.entries(DEFAULT_ACCOUNTS).filter(function(e){return!S.accounts||!S.accounts[e[0]]});
+  if(!missing.length){alert('所有默认账号都已存在，无需恢复');return}
+  if(!confirm('将恢复以下缺失的默认账号：\n'+missing.map(function(e){return'  · '+e[1].name+'（PIN: '+e[1].pin+'）'}).join('\n')+'\n\n已存在的账号不会被覆盖。确认？'))return;
+  missing.forEach(function(e){dbSet('accounts/'+e[0],e[1])});
+  alert('✓ 已恢复 '+missing.length+' 个账号');
+}
 function buildColorPicker(){
   var el=g('color-picker');if(!el)return;
   selColor=COLORS[0];
@@ -2855,7 +2862,7 @@ return {
   submitPickup:submitPickup, confirmPickup:confirmPickup, rejectPickup:rejectPickup,
   editCatalog:editCatalog, saveCatalog:saveCatalog,
   approveSuggest:approveSuggest, rejectSuggest:rejectSuggest, submitSuggest:submitSuggest,
-  editAccount:editAccount, deleteAccount:deleteAccount, saveAccount:saveAccount,
+  editAccount:editAccount, deleteAccount:deleteAccount, saveAccount:saveAccount, restoreDefaults:restoreDefaults,
   exportPO:exportPO, dbDelete:dbDelete, dbUpdate:dbUpdate, dbSet:dbSet,
   openAddStock:openAddStock, onStockCatalogSel:onStockCatalogSel, saveStock:saveStock,
   adjStock:adjStock, saveAdj:saveAdj, quickAdj:quickAdj,
